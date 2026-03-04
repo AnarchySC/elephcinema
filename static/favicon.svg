@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <linearGradient id="disc-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E85D04"/>
+      <stop offset="100%" stop-color="#00d4ff"/>
+    </linearGradient>
+  </defs>
+  <!-- Dark background -->
+  <rect width="32" height="32" rx="6" ry="6" fill="#0d1117"/>
+  <!-- Elephant head silhouette facing right, minimal geometric -->
+  <!-- Head circle -->
+  <circle cx="14" cy="12" r="7" fill="#E85D04"/>
+  <!-- Ear -->
+  <ellipse cx="8" cy="10" rx="4" ry="5.5" fill="#E85D04"/>
+  <!-- Ear inner -->
+  <ellipse cx="8" cy="10" rx="2.2" ry="3.5" fill="#0d1117" opacity="0.5"/>
+  <!-- Trunk curving down into disc shape -->
+  <path d="M19 15 Q22 15 23 18 Q24 21 21 22 Q18 23 16 21" fill="none" stroke="#E85D04" stroke-width="2.2" stroke-linecap="round"/>
+  <!-- Eye -->
+  <circle cx="15.5" cy="10.5" r="1.2" fill="#0d1117"/>
+  <circle cx="15.8" cy="10.3" r="0.5" fill="#00d4ff"/>
+  <!-- Disc/film reel at trunk end -->
+  <circle cx="18" cy="23" r="4.5" fill="none" stroke="#00d4ff" stroke-width="1.2"/>
+  <circle cx="18" cy="23" r="1.8" fill="none" stroke="#00d4ff" stroke-width="0.8"/>
+  <!-- Disc shine -->
+  <path d="M15 20.5 A4.5 4.5 0 0 1 21 20.5" fill="none" stroke="#FAA307" stroke-width="0.5" opacity="0.6"/>
+</svg>

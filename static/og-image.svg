@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <style>
+      @font-face {
+        font-family: 'Fallback Mono';
+        src: local('JetBrains Mono'), local('Fira Code'), local('Source Code Pro'), local('Consolas'), local('Courier New');
+      }
+      .og-title {
+        font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', 'Consolas', 'Courier New', monospace;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+      }
+      .og-tagline {
+        font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', 'Consolas', 'Courier New', monospace;
+        font-weight: 400;
+        letter-spacing: 0.12em;
+      }
+      .og-sub {
+        font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', 'Consolas', 'Courier New', monospace;
+        font-weight: 300;
+        letter-spacing: 0.2em;
+      }
+    </style>
+    <filter id="title-glow" x="-10%" y="-20%" width="120%" height="140%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="icon-glow-lg" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="ambient-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="40"/>
+    </filter>
+    <linearGradient id="bg-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#05080e"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </linearGradient>
+    <linearGradient id="og-trunk" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E85D04"/>
+      <stop offset="100%" stop-color="#FAA307"/>
+    </linearGradient>
+    <radialGradient id="disc-surface" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg-grad)"/>
+
+  <!-- Ambient glow blobs for atmosphere -->
+  <circle cx="500" cy="260" r="120" fill="#E85D04" opacity="0.06" filter="url(#ambient-glow)"/>
+  <circle cx="700" cy="300" r="100" fill="#00d4ff" opacity="0.04" filter="url(#ambient-glow)"/>
+
+  <!-- Subtle grid overlay -->
+  <g opacity="0.03" stroke="#00d4ff" stroke-width="0.5">
+    <line x1="0" y1="105" x2="1200" y2="105"/>
+    <line x1="0" y1="210" x2="1200" y2="210"/>
+    <line x1="0" y1="315" x2="1200" y2="315"/>
+    <line x1="0" y1="420" x2="1200" y2="420"/>
+    <line x1="0" y1="525" x2="1200" y2="525"/>
+    <line x1="200" y1="0" x2="200" y2="630"/>
+    <line x1="400" y1="0" x2="400" y2="630"/>
+    <line x1="600" y1="0" x2="600" y2="630"/>
+    <line x1="800" y1="0" x2="800" y2="630"/>
+    <line x1="1000" y1="0" x2="1000" y2="630"/>
+  </g>
+
+  <!-- === Large centered icon === -->
+  <g transform="translate(440, 80) scale(1.6)">
+    <!-- Disc -->
+    <g filter="url(#icon-glow-lg)">
+      <circle cx="130" cy="110" r="55" fill="none" stroke="#00d4ff" stroke-width="2" opacity="0.7"/>
+      <circle cx="130" cy="110" r="40" fill="none" stroke="#00d4ff" stroke-width="1" opacity="0.35"/>
+      <circle cx="130" cy="110" r="22" fill="none" stroke="#00d4ff" stroke-width="1.5" opacity="0.5"/>
+      <circle cx="130" cy="110" r="6" fill="#00d4ff" opacity="0.4"/>
+    </g>
+    <circle cx="130" cy="110" r="55" fill="url(#disc-surface)"/>
+    <!-- Disc tracks -->
+    <g opacity="0.1" stroke="#00d4ff" fill="none" stroke-width="0.5">
+      <circle cx="130" cy="110" r="28"/>
+      <circle cx="130" cy="110" r="32"/>
+      <circle cx="130" cy="110" r="45"/>
+      <circle cx="130" cy="110" r="50"/>
+    </g>
+
+    <!-- Elephant head -->
+    <g filter="url(#icon-glow-lg)">
+      <circle cx="90" cy="50" r="42" fill="#E85D04"/>
+      <ellipse cx="52" cy="40" rx="22" ry="34" fill="#E85D04"/>
+      <ellipse cx="52" cy="40" rx="13" ry="22" fill="#05080e" opacity="0.45"/>
+      <ellipse cx="52" cy="40" rx="8" ry="15" fill="#E85D04" opacity="0.2"/>
+    </g>
+
+    <!-- Trunk -->
+    <path d="M118 68 Q142 66 152 80 Q162 95 158 110 Q154 125 142 130 Q132 134 124 128"
+          fill="none" stroke="url(#og-trunk)" stroke-width="10" stroke-linecap="round" filter="url(#icon-glow-lg)"/>
+
+    <!-- Eye -->
+    <circle cx="100" cy="42" r="7" fill="#05080e"/>
+    <circle cx="102.5" cy="39.5" r="3" fill="#00d4ff" filter="url(#icon-glow-lg)"/>
+    <circle cx="103.5" cy="38.5" r="1.1" fill="#fff" opacity="0.85"/>
+
+    <!-- Tusk -->
+    <path d="M112 62 L118 72 L108 68 Z" fill="#FAA307" opacity="0.7"/>
+  </g>
+
+  <!-- === Title text === -->
+  <text x="600" y="410" text-anchor="middle" class="og-title" font-size="72" fill="#E85D04" filter="url(#title-glow)">ELEPHCINEMA</text>
+
+  <!-- === Tagline === -->
+  <text x="600" y="460" text-anchor="middle" class="og-tagline" font-size="22" fill="#c8ccd4" opacity="0.85">Automated Blu-ray &amp; DVD Pipeline</text>
+
+  <!-- === Tri-color divider bar === -->
+  <rect x="260" y="490" width="227" height="4" rx="2" fill="#00d4ff"/>
+  <rect x="487" y="490" width="227" height="4" rx="2" fill="#E85D04"/>
+  <rect x="714" y="490" width="226" height="4" rx="2" fill="#FFD000"/>
+
+  <!-- Bottom branding -->
+  <text x="600" y="540" text-anchor="middle" class="og-sub" font-size="13" fill="#c8ccd4" opacity="0.4">ANARCHYGAMES.ORG</text>
+
+  <!-- Corner accents -->
+  <g stroke-width="1.5" opacity="0.25">
+    <line x1="24" y1="24" x2="24" y2="52" stroke="#00d4ff"/>
+    <line x1="24" y1="24" x2="52" y2="24" stroke="#00d4ff"/>
+    <line x1="1176" y1="24" x2="1176" y2="52" stroke="#E85D04"/>
+    <line x1="1148" y1="24" x2="1176" y2="24" stroke="#E85D04"/>
+    <line x1="24" y1="606" x2="24" y2="578" stroke="#FAA307"/>
+    <line x1="24" y1="606" x2="52" y2="606" stroke="#FAA307"/>
+    <line x1="1176" y1="606" x2="1176" y2="578" stroke="#FFD000"/>
+    <line x1="1148" y1="606" x2="1176" y2="606" stroke="#FFD000"/>
+  </g>
+
+  <!-- Decorative scan line effect -->
+  <g opacity="0.015">
+    <rect x="0" y="0" width="1200" height="1" fill="#00d4ff"/>
+    <rect x="0" y="3" width="1200" height="1" fill="#00d4ff"/>
+    <rect x="0" y="6" width="1200" height="1" fill="#00d4ff"/>
+    <rect x="0" y="9" width="1200" height="1" fill="#00d4ff"/>
+    <rect x="0" y="12" width="1200" height="1" fill="#00d4ff"/>
+    <rect x="0" y="15" width="1200" height="1" fill="#00d4ff"/>
+    <rect x="0" y="18" width="1200" height="1" fill="#00d4ff"/>
+  </g>
+</svg>
