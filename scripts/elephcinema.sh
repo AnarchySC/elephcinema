@@ -1,7 +1,7 @@
 #!/bin/bash
 # ELEPHCINEMA — Automated Blu-ray/DVD rip and encode pipeline
-# Single MakeMKV invocation with auto TV detection, HandBrake encoding,
-# and verified copy to output directory.
+# Single MakeMKV invocation, ffprobe classification, VAAPI HEVC encoding,
+# parallel TV episode processing, and verified copy to output directory.
 #
 # Supports 4K UHD with LibreDrive-enabled drives (BU40N with DE firmware).
 #
@@ -51,11 +51,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# === LOCK MECHANISM ===
+# === LOCK MECHANISM (with stale PID recovery) ===
 exec 200>"$LOCK_FILE"
 if ! flock -n 200; then
-    log "Another ELEPHCINEMA instance is already running, exiting"
-    exit 0
+    LOCK_PID=$(cat "$LOCK_FILE" 2>/dev/null | head -1)
+    if [ -n "$LOCK_PID" ] && ! kill -0 "$LOCK_PID" 2>/dev/null; then
+        log "Stale lock from dead PID $LOCK_PID — removing and retrying"
+        rm -f "$LOCK_FILE"
+        exec 200>"$LOCK_FILE"
+        if ! flock -n 200; then
+            log "Another ELEPHCINEMA instance is already running, exiting"
+            exit 0
+        fi
+    else
+        log "Another ELEPHCINEMA instance is already running (PID ${LOCK_PID:-unknown}), exiting"
+        exit 0
+    fi
 fi
 echo $$ >&200
 
@@ -103,8 +114,8 @@ else
     RIP_START=$(date +%s)
     status "rip:0"
 
-    "$ELEPHCINEMA_MAKEMKVCON" mkv $MKV_SOURCE all "$RIP_DIR" --progress=-stdout -r 2>&1 | while IFS= read -r line; do
-        echo "$line"
+    MAKEMKV_LOG="$TEMP_DIR/makemkv.log"
+    "$ELEPHCINEMA_MAKEMKVCON" mkv $MKV_SOURCE all "$RIP_DIR" --progress=-stdout -r 2>&1 | tee "$MAKEMKV_LOG" | while IFS= read -r line; do
         if [[ "$line" =~ PRGV:([0-9]+),([0-9]+),([0-9]+) ]]; then
             CURRENT="${BASH_REMATCH[1]}"
             MAX="${BASH_REMATCH[3]}"
@@ -113,9 +124,19 @@ else
                 echo -ne "\r>>> Ripping: ${PCT}%   "
                 status "rip:$PCT"
             fi
+        elif [[ "$line" =~ ^MSG: ]] || [[ "$line" =~ ^PRGT: ]]; then
+            echo "$line"
         fi
     done
     echo ""
+
+    # Log any MakeMKV errors for diagnostics
+    if [ -f "$MAKEMKV_LOG" ]; then
+        ERROR_LINES=$(grep -cE "^MSG:.*error|failed|Failed" "$MAKEMKV_LOG" 2>/dev/null || echo 0)
+        if [ "$ERROR_LINES" -gt 0 ]; then
+            log "MakeMKV reported $ERROR_LINES error messages — see $MAKEMKV_LOG"
+        fi
+    fi
 
     RIP_END=$(date +%s)
     RIP_ELAPSED=$(( RIP_END - RIP_START ))
@@ -141,7 +162,7 @@ else
     touch "$RIP_MARKER"
 fi
 
-# === CLASSIFY DISC (ffprobe-based, sets preset/DVD detection) ===
+# === CLASSIFY DISC (ffprobe-based) ===
 echo ""
 echo "######################################"
 echo "#  STEP 2: ANALYZING CONTENT        #"
@@ -153,7 +174,6 @@ classify_disc "$RIP_DIR"
 # === DETERMINE MOVIE VS TV ===
 
 if [ "$FORCE_MODE" = "tv" ]; then
-    # --force-tv: build episode list from files in 15-65 min range
     log "Force-TV mode: skipping Movie/TV dialog"
     declare -a EPISODE_FILES=()
     for mkv in "${DISC_FILES[@]}"; do
@@ -164,7 +184,6 @@ if [ "$FORCE_MODE" = "tv" ]; then
     done
     NUM_EPISODES=${#EPISODE_FILES[@]}
 
-    # Fallback: <3 episodes means this is probably a movie
     if [ "$NUM_EPISODES" -lt 3 ]; then
         log "Force-TV: Only $NUM_EPISODES episode-length files, falling back to movie"
         FORCE_MODE="movie"
@@ -234,20 +253,8 @@ elif [ -z "$FORCE_MODE" ]; then
     fi
 fi
 
-# === TV: GET SHOW DETAILS ===
+# === TV: GET SHOW DETAILS & SELECT EPISODES ===
 if [ "$IS_TV" -eq 1 ]; then
-    if [ "$FORCE_MODE" = "tv" ]; then
-        # --force-tv: need show details dialog (no way around it)
-        :
-    else
-        # Build episode list: all files
-        declare -a EPISODE_FILES=()
-        for mkv in "${DISC_FILES[@]}"; do
-            EPISODE_FILES+=("$mkv")
-        done
-        NUM_EPISODES=${#EPISODE_FILES[@]}
-    fi
-
     if [ -z "$SHOW_NAME" ]; then
         # Set display env if not already set (force-tv mode)
         export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
@@ -272,7 +279,7 @@ if [ "$IS_TV" -eq 1 ]; then
             --undecorated \
             --borders=20 \
             --button="Cancel:1" \
-            --button="Rip Episodes:0" \
+            --button="Next:0" \
             2>/dev/null)
 
         TV_EXIT=$?
@@ -293,7 +300,73 @@ if [ "$IS_TV" -eq 1 ]; then
         fi
     fi
 
-    log "TV: $NUM_EPISODES titles will be encoded as episodes"
+    # Episode selection checklist (skip for --force-tv which already filtered)
+    if [ "$FORCE_MODE" != "tv" ]; then
+        CHECKLIST_ARGS=()
+        title_idx=1
+        for mkv in "${DISC_FILES[@]}"; do
+            dur="${FILE_DURATION[$mkv]}"
+            size_mb=$(( ${FILE_SIZE[$mkv]} / 1048576 ))
+            width="${FILE_WIDTH[$mkv]}"
+            precheck="FALSE"
+            if [ "$dur" -ge 15 ] && [ "$dur" -le 65 ]; then
+                precheck="TRUE"
+            fi
+            CHECKLIST_ARGS+=("$precheck" "Title $title_idx" "${dur} min" "${size_mb} MB" "${width}px")
+            title_idx=$(( title_idx + 1 ))
+        done
+
+        SELECTED=$(yad --list \
+            --title="ELEPHCINEMA — Select Episodes" \
+            --text="<b>Select which titles are episodes:</b>\nShow: $SHOW_NAME, Season $SEASON_NUM" \
+            --checklist \
+            --column="Rip" \
+            --column="Title" \
+            --column="Duration" \
+            --column="Size" \
+            --column="Width" \
+            --print-column=2 \
+            --separator="|" \
+            --width=500 --height=400 \
+            --center \
+            --on-top \
+            --skip-taskbar \
+            --sticky \
+            --borders=20 \
+            --button="Cancel:1" \
+            --button="Encode Selected:0" \
+            "${CHECKLIST_ARGS[@]}" \
+            2>/dev/null)
+
+        SEL_EXIT=$?
+        if [ $SEL_EXIT -ne 0 ] || [ -z "$SELECTED" ]; then
+            log "TV: Episode selection cancelled — aborting"
+            status "error:Cancelled"
+            exit 0
+        fi
+
+        # Map selected titles back to files
+        declare -a EPISODE_FILES=()
+        IFS='|' read -ra SEL_TITLES <<< "$SELECTED"
+        for sel in "${SEL_TITLES[@]}"; do
+            sel=$(echo "$sel" | xargs)
+            [ -z "$sel" ] && continue
+            tnum="${sel#Title }"
+            fidx=$(( tnum - 1 ))
+            if [ "$fidx" -ge 0 ] && [ "$fidx" -lt "${#DISC_FILES[@]}" ]; then
+                EPISODE_FILES+=("${DISC_FILES[$fidx]}")
+            fi
+        done
+        NUM_EPISODES=${#EPISODE_FILES[@]}
+
+        if [ "$NUM_EPISODES" -eq 0 ]; then
+            log "TV: No episodes selected — aborting"
+            status "error:No episodes selected"
+            exit 0
+        fi
+    fi
+
+    log "TV: $NUM_EPISODES titles selected as episodes"
 fi
 
 # === MOVIE: GET TITLE ===
@@ -334,20 +407,6 @@ if [ "$IS_TV" -eq 1 ]; then
     OUTPUT_DIR="$TV_OUTPUT_BASE/$SHOW_NAME/$SEASON_DIR"
     mkdir -p "$OUTPUT_DIR"
 
-    # Delete non-episode files to reclaim space (force-tv mode)
-    if [ "$FORCE_MODE" = "tv" ]; then
-        for mkv in "${DISC_FILES[@]}"; do
-            is_ep=0
-            for ep in "${EPISODE_FILES[@]}"; do
-                [ "$mkv" = "$ep" ] && is_ep=1 && break
-            done
-            if [ "$is_ep" -eq 0 ]; then
-                log "TV: Removing non-episode: $(basename "$mkv") (${FILE_DURATION[$mkv]} min)"
-                rm -f "$mkv"
-            fi
-        done
-    fi
-
     # Auto-increment episode numbers from existing files
     NEXT_EPISODE=1
     if [ -d "$OUTPUT_DIR" ]; then
@@ -360,84 +419,101 @@ if [ "$IS_TV" -eq 1 ]; then
 
     echo ""
     echo "######################################"
-    echo "#  STEP 3: ENCODING $NUM_EPISODES EPISODES"
+    echo "#  STEP 3: ENCODING $NUM_EPISODES EPISODES (VAAPI, parallel)"
     echo "######################################"
     echo ""
 
     FAIL_COUNT=0
+    MAX_PARALLEL="$ELEPHCINEMA_MAX_PARALLEL"
+
+    # Build arrays for parallel encode
+    declare -a EP_INPUTS=()
+    declare -a EP_OUTPUTS=()
+    declare -a EP_TAGS=()
+    declare -a EP_FINALS=()
 
     for (( idx=0; idx<NUM_EPISODES; idx++ )); do
-        EP_MKV="${EPISODE_FILES[$idx]}"
         EP_NUM=$(( NEXT_EPISODE + idx ))
         EP_TAG=$(printf "E%02d" "$EP_NUM")
-        EP_LABEL="E$((idx+1))/${NUM_EPISODES}"
-        FILENAME="$SHOW_NAME - ${SEASON_TAG}${EP_TAG}.mp4"
-        LOCAL_MP4="$TEMP_DIR/${SHOW_NAME}_${SEASON_TAG}${EP_TAG}.mp4"
-        FINAL_MP4="$OUTPUT_DIR/$FILENAME"
+        EP_TAGS+=("$EP_TAG")
+        EP_INPUTS+=("${EPISODE_FILES[$idx]}")
+        EP_OUTPUTS+=("$TEMP_DIR/${SHOW_NAME}_${SEASON_TAG}${EP_TAG}.mp4")
+        EP_FINALS+=("$OUTPUT_DIR/$SHOW_NAME - ${SEASON_TAG}${EP_TAG}.mp4")
+    done
 
-        MKV_SIZE=$(du -h "$EP_MKV" | cut -f1)
-        log "TV: Encoding $EP_LABEL ($EP_TAG)"
-        status "encode:0:$EP_LABEL"
+    # Encode in batches of MAX_PARALLEL
+    for (( batch_start=0; batch_start<NUM_EPISODES; batch_start+=MAX_PARALLEL )); do
+        batch_end=$(( batch_start + MAX_PARALLEL ))
+        [ "$batch_end" -gt "$NUM_EPISODES" ] && batch_end=$NUM_EPISODES
+        batch_size=$(( batch_end - batch_start ))
 
-        HandBrakeCLI -i "$EP_MKV" -o "$LOCAL_MP4" \
-            --preset="$PRESET" \
-            $HANDBRAKE_EXTRA_ARGS \
-            --audio-lang-list "$ELEPHCINEMA_AUDIO_LANGS" \
-            --all-audio \
-            --subtitle-lang-list "$ELEPHCINEMA_SUB_LANGS" \
-            --all-subtitles \
-            --optimize \
-            2>&1 | tee "$TEMP_DIR/handbrake_${EP_TAG}.log" | while IFS= read -r line; do
-            if [[ "$line" =~ Encoding:.*([0-9]+\.[0-9]+)\ % ]]; then
-                PCT="${BASH_REMATCH[1]%.*}"
-                status "encode:$PCT:$EP_LABEL"
-                echo -ne "\r>>> Encoding $EP_LABEL: ${PCT}%   "
-            fi
+        log "TV: Encoding batch $((batch_start+1))-${batch_end} of $NUM_EPISODES (VAAPI hevc, $batch_size parallel)"
+        status "encode:batch:$((batch_start+1))-${batch_end}/$NUM_EPISODES"
+
+        # Launch parallel encodes
+        declare -a BATCH_PIDS=()
+        for (( idx=batch_start; idx<batch_end; idx++ )); do
+            EP_LOG="$TEMP_DIR/ffmpeg_${EP_TAGS[$idx]}.log"
+            MKV_SIZE=$(du -h "${EP_INPUTS[$idx]}" | cut -f1)
+            log "TV: Starting ${EP_TAGS[$idx]} ($MKV_SIZE)"
+
+            (
+                encode_vaapi "${EP_INPUTS[$idx]}" "${EP_OUTPUTS[$idx]}" "$EP_LOG" "encode:${EP_TAGS[$idx]}"
+            ) &
+            BATCH_PIDS+=($!)
         done
-        echo ""
 
-        # Validate & copy
-        if validate_file "$LOCAL_MP4"; then
-            LOCAL_SIZE=$(du -h "$LOCAL_MP4" | cut -f1)
-            log "TV: Encoded $EP_TAG: $MKV_SIZE -> $LOCAL_SIZE"
+        # Wait for batch to complete
+        for (( j=0; j<batch_size; j++ )); do
+            idx=$(( batch_start + j ))
+            wait "${BATCH_PIDS[$j]}"
+            ENCODE_EXIT=$?
 
-            status "copying:$EP_LABEL"
-            echo ">>> Copying $EP_LABEL to output..."
-            cp "$LOCAL_MP4" "$FINAL_MP4"
+            EP_TAG="${EP_TAGS[$idx]}"
+            LOCAL_MP4="${EP_OUTPUTS[$idx]}"
+            FINAL_MP4="${EP_FINALS[$idx]}"
+            EP_MKV="${EP_INPUTS[$idx]}"
 
-            if [ -f "$FINAL_MP4" ]; then
-                SRC_SIZE=$(stat -c%s "$LOCAL_MP4")
-                DST_SIZE=$(stat -c%s "$FINAL_MP4")
+            if [ "$ENCODE_EXIT" -eq 0 ] && validate_file "$LOCAL_MP4"; then
+                LOCAL_SIZE=$(du -h "$LOCAL_MP4" | cut -f1)
+                MKV_SIZE=$(du -h "$EP_MKV" 2>/dev/null | cut -f1)
+                log "TV: Encoded $EP_TAG: $MKV_SIZE -> $LOCAL_SIZE"
 
-                if [ "$SRC_SIZE" -eq "$DST_SIZE" ] && validate_file "$FINAL_MP4"; then
-                    log "TV: $EP_TAG copied and verified"
+                status "copying:$EP_TAG"
+                cp "$LOCAL_MP4" "$FINAL_MP4"
+
+                if [ -f "$FINAL_MP4" ]; then
+                    SRC_SIZE=$(stat -c%s "$LOCAL_MP4")
+                    DST_SIZE=$(stat -c%s "$FINAL_MP4")
+
+                    if [ "$SRC_SIZE" -eq "$DST_SIZE" ] && validate_file "$FINAL_MP4"; then
+                        log "TV: $EP_TAG copied and verified"
+                    else
+                        log "TV: ERROR: Copy verification failed for $EP_TAG"
+                        rm -f "$FINAL_MP4"
+                        FAIL_COUNT=$(( FAIL_COUNT + 1 ))
+                        KEEP_TEMP=1
+                    fi
                 else
-                    log "TV: ERROR: Copy verification failed for $EP_TAG"
-                    rm -f "$FINAL_MP4"
+                    log "TV: ERROR: Copy failed for $EP_TAG"
                     FAIL_COUNT=$(( FAIL_COUNT + 1 ))
                     KEEP_TEMP=1
                 fi
             else
-                log "TV: ERROR: Copy failed for $EP_TAG"
+                log "TV: ERROR: Encode failed for $EP_TAG, saving raw MKV"
+                FALLBACK_MKV="$OUTPUT_DIR/${SHOW_NAME} - ${SEASON_TAG}${EP_TAG}.mkv"
+                cp "$EP_MKV" "$FALLBACK_MKV" 2>/dev/null
+                if [ $? -eq 0 ]; then
+                    log "TV: Saved raw MKV fallback: $FALLBACK_MKV"
+                else
+                    log "TV: ERROR: Could not save raw MKV"
+                    KEEP_TEMP=1
+                fi
                 FAIL_COUNT=$(( FAIL_COUNT + 1 ))
-                KEEP_TEMP=1
             fi
-        else
-            # Encode failed — save raw MKV as fallback
-            log "TV: ERROR: Encode failed for $EP_TAG, saving raw MKV"
-            FALLBACK_MKV="$OUTPUT_DIR/${SHOW_NAME} - ${SEASON_TAG}${EP_TAG}.mkv"
-            cp "$EP_MKV" "$FALLBACK_MKV"
-            if [ $? -eq 0 ]; then
-                log "TV: Saved raw MKV fallback: $FALLBACK_MKV"
-            else
-                log "TV: ERROR: Could not save raw MKV"
-                KEEP_TEMP=1
-            fi
-            FAIL_COUNT=$(( FAIL_COUNT + 1 ))
-        fi
 
-        # Clean up this episode's temp files
-        rm -f "$EP_MKV" "$LOCAL_MP4" "$TEMP_DIR/handbrake_${EP_TAG}.log"
+            rm -f "$EP_MKV" "$LOCAL_MP4" "$TEMP_DIR/ffmpeg_${EP_TAG}.log"
+        done
     done
 
     # Completion message
@@ -527,7 +603,7 @@ else
     echo ">>> Main feature: $BASENAME ($MKV_SIZE)"
     echo ""
     echo "######################################"
-    echo "#  STEP 3: COMPRESSING              #"
+    echo "#  STEP 3: COMPRESSING (VAAPI HEVC) #"
     echo "######################################"
     echo ""
     echo ">>> Encoding locally then copying to output..."
@@ -544,29 +620,12 @@ else
     fi
 
     status "encode:0"
-    log "Encoding to local temp: $LOCAL_OUTPUT"
+    log "Encoding to local temp: $LOCAL_OUTPUT (VAAPI hevc)"
 
-    HandBrakeCLI -i "$MAIN_MKV" -o "$LOCAL_OUTPUT" \
-        --preset="$PRESET" \
-        $HANDBRAKE_EXTRA_ARGS \
-        --audio-lang-list "$ELEPHCINEMA_AUDIO_LANGS" \
-        --all-audio \
-        --subtitle-lang-list "$ELEPHCINEMA_SUB_LANGS" \
-        --all-subtitles \
-        --optimize \
-        2>&1 | tee "$TEMP_DIR/handbrake.log" | while IFS= read -r line; do
-        if [[ "$line" =~ Encoding:.*([0-9]+\.[0-9]+)\ % ]]; then
-            PCT="${BASH_REMATCH[1]%.*}"
-            status "encode:$PCT"
-            echo -ne "\r>>> Encoding: ${PCT}%   "
-        fi
-    done
-    echo ""
-
-    # Validate LOCAL output before copying
+    ENCODE_LOG="$TEMP_DIR/ffmpeg_encode.log"
     VALID_OUTPUT=0
-    if [ -f "$LOCAL_OUTPUT" ]; then
-        if ffprobe -v error -show_format "$LOCAL_OUTPUT" 2>&1 | grep -q "format_name"; then
+    if encode_vaapi "$MAIN_MKV" "$LOCAL_OUTPUT" "$ENCODE_LOG" "encode"; then
+        if validate_file "$LOCAL_OUTPUT"; then
             VALID_OUTPUT=1
             LOCAL_SIZE=$(du -h "$LOCAL_OUTPUT" | cut -f1)
             log "Encoding complete and valid: $LOCAL_SIZE"
@@ -574,6 +633,8 @@ else
             log "ERROR: Encoded file is corrupt!"
             rm -f "$LOCAL_OUTPUT"
         fi
+    else
+        log "ERROR: VAAPI encode failed — see $ENCODE_LOG"
     fi
 
     if [ "$VALID_OUTPUT" -eq 1 ]; then
@@ -655,5 +716,4 @@ log "=== Done: ${DONE_MSG:-complete} ==="
 status "done:${DONE_MSG:-complete}"
 notify-send "ELEPHCINEMA" "Done: ${DONE_MSG:-complete}" 2>/dev/null
 
-sleep 30
 exit 0

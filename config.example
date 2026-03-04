@@ -26,9 +26,11 @@
 # Minimum free disk space (GB) before ripping
 # ELEPHCINEMA_MIN_DISK_GB=55
 
-# HandBrake presets
-# ELEPHCINEMA_PRESET_HD="Fast 1080p30"
-# ELEPHCINEMA_PRESET_DVD="Fast 480p30"
+# VAAPI hardware encoding settings
+# ELEPHCINEMA_VAAPI_DEVICE="/dev/dri/renderD128"   # GPU render node
+# ELEPHCINEMA_QP_HD=24                              # Quality for Blu-ray/HD (lower = better, bigger)
+# ELEPHCINEMA_QP_DVD=20                             # Quality for DVD (higher quality for low-res source)
+# ELEPHCINEMA_MAX_PARALLEL=3                        # Max concurrent TV episode encodes
 
 # Audio and subtitle languages (comma-separated)
 # ELEPHCINEMA_AUDIO_LANGS="eng,jpn,und"

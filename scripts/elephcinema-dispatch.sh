@@ -39,7 +39,7 @@ sleep 5
 if [[ "$DEVICE" =~ ^/dev/ ]]; then
     USE_DEV_PATH="$DEVICE"
 elif [ "$DEVICE" = "auto" ]; then
-    for sr in /dev/sr0 /dev/sr1 /dev/sr2; do
+    for sr in /dev/sr{0..9}; do
         if [ -e "$sr" ]; then
             USE_DEV_PATH="$sr"
             break
