@@ -1,0 +1,4 @@
+# ELEPHCINEMA — Auto-rip Blu-ray/DVD when disc is inserted
+# Supports sr0 through sr1 (add more KERNEL patterns if needed)
+# Install: sudo cp this-file /etc/udev/rules.d/99-elephcinema.rules && sudo udevadm control --reload-rules
+ACTION=="change", SUBSYSTEM=="block", KERNEL=="sr[0-1]", ENV{ID_CDROM_MEDIA}=="1", RUN+="/usr/bin/systemd-run --uid=__USER__ --gid=__USER__ __INSTALL_PREFIX__/scripts/elephcinema-dispatch.sh /dev/%k"

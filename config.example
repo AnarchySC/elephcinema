@@ -1,0 +1,35 @@
+# ELEPHCINEMA Configuration
+# Copy to ~/.config/elephcinema/config and edit to taste.
+# This file is sourced by bash — use shell syntax.
+
+# Output directories for ripped media
+# ELEPHCINEMA_MOVIE_DIR="$HOME/Movies"
+# ELEPHCINEMA_TV_DIR="$HOME/TV"
+
+# Temporary directory for ripping/encoding (needs ~60GB free for Blu-ray)
+# ELEPHCINEMA_TEMP_DIR="$HOME/.local/share/elephcinema/temp"
+
+# Log file location
+# ELEPHCINEMA_LOG_FILE="$HOME/.local/share/elephcinema/elephcinema.log"
+
+# Status file (used by tray indicator and notifications)
+# ELEPHCINEMA_STATUS_FILE="/tmp/elephcinema-status"
+
+# Lock files
+# ELEPHCINEMA_LOCK_FILE="/tmp/elephcinema.lock"
+# ELEPHCINEMA_DISPATCH_LOCK="/tmp/elephcinema-dispatch.lock"
+# ELEPHCINEMA_COOLDOWN_FILE="/tmp/elephcinema-cooldown"
+
+# Path to makemkvcon binary
+# ELEPHCINEMA_MAKEMKVCON="/usr/bin/makemkvcon"
+
+# Minimum free disk space (GB) before ripping
+# ELEPHCINEMA_MIN_DISK_GB=55
+
+# HandBrake presets
+# ELEPHCINEMA_PRESET_HD="Fast 1080p30"
+# ELEPHCINEMA_PRESET_DVD="Fast 480p30"
+
+# Audio and subtitle languages (comma-separated)
+# ELEPHCINEMA_AUDIO_LANGS="eng,jpn,und"
+# ELEPHCINEMA_SUB_LANGS="eng"
