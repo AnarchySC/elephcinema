@@ -1,24 +1,59 @@
-# ELEPHCINEMA
+<div align="center">
 
-Automated Blu-ray and DVD ripping pipeline for Linux. Insert a disc, answer one dialog, get an encoded MP4 in your library.
+```
+ ▄███████▄  ▄█        ▄███████▄    ▄███████▄  ▄█   ▄█
+ ██▀▀▀▀▀██ ███       ██▀     ▀██  ██▀     ▀██ ███  ███
+ ██     ██ ███▌      ██       ██  ██       ██ ███▌ ███▌
+ ████████  ███▌      ████████▀   ████████▀   ███▌ ███▌
+ ██        ███▌      ██          ██          ███▌ ███▌
+ ██        ███       ██▄     ▄██ ██          ███  ███
+ ▀█        █▀         ▀███████▀  ▀█         █▀   █▀
+
+╔═══════════════════════════════════════════════════════╗
+║  E L E P H C I N E M A                               ║
+║  ─────────────────────────────────────────────────    ║
+║  Automated Blu-ray/DVD ripping pipeline for Linux     ║
+║  Insert a disc. Answer one dialog. Get an MP4.        ║
+╚═══════════════════════════════════════════════════════╝
+```
+
+[![GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-E85D04?style=flat-square)](LICENSE)
+[![Linux](https://img.shields.io/badge/platform-Linux-00d4ff?style=flat-square)]()
+[![Bash](https://img.shields.io/badge/language-Bash-FAA307?style=flat-square)]()
+[![AnarchyGames](https://img.shields.io/badge/by-AnarchyGames.org-E85D04?style=flat-square)](https://anarchygames.org)
+
+*Building things that should exist.*
+
+</div>
+
+---
 
 ## How It Works
+
+```
+ ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+ │  INSERT   │───▸│  RIP     │───▸│ CLASSIFY │───▸│  ENCODE  │───▸│  DONE    │
+ │  DISC     │    │ MakeMKV  │    │ ffprobe  │    │ HandBrake│    │  ✓ eject │
+ └──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
+     udev            all titles      Movie/TV?       MP4 out        verified
+     trigger         one pass        auto-detect     preset match   copy
+```
 
 1. **udev** detects disc insertion and triggers the dispatcher
 2. **MakeMKV** rips all titles in a single pass (avoids LibreDrive double-open bugs)
 3. **ffprobe** classifies the disc as Movie or TV based on file count, duration, and resolution
 4. A **yad dialog** asks you to confirm Movie/TV and enter a title
 5. **HandBrake** encodes to MP4 with the appropriate preset (1080p for Blu-ray, 480p for DVD)
-6. The encoded file is **copied and verified** (size + ffprobe check) in your output directory
+6. The encoded file is **copied and verified** (size + ffprobe check) to your output directory
 7. The disc is **ejected** automatically
 
-For TV shows, episodes are auto-numbered based on existing files in the season folder. DVD and 4K sources are detected automatically and use appropriate encoding presets.
+TV episodes are auto-numbered from existing files in the season folder. DVD and 4K sources are detected automatically.
 
 ## Hardware Requirements
 
 - An optical drive supported by MakeMKV
 - For 4K UHD: a **LibreDrive-compatible** drive (e.g., BU40N with DE firmware)
-- Enough temp disk space for a full Blu-ray rip (~55GB minimum)
+- ~55GB free temp disk space for a full Blu-ray rip
 
 ## Dependencies
 
@@ -35,13 +70,7 @@ For TV shows, episodes are auto-numbered based on existing files in the season f
 | paplay | `pulseaudio-utils` | No (sound alert) |
 | udisksctl | `udisks2` | No (auto-unmount) |
 
-### Tray indicator (optional)
-
-The Python tray indicator requires `gir1.2-ayatanaappindicator3-0.1`:
-
-```bash
-sudo apt install gir1.2-ayatanaappindicator3-0.1
-```
+**Tray indicator** (optional): `sudo apt install gir1.2-ayatanaappindicator3-0.1`
 
 ## Installation
 
@@ -52,15 +81,11 @@ cd elephcinema
 ./install.sh /usr/local   # or choose a custom prefix
 ```
 
-The installer will:
-- Check all dependencies
-- Copy scripts to the install prefix
-- Create `~/.config/elephcinema/config` from the example
-- Offer to install a udev rule for auto-rip on disc insert
+The installer checks all dependencies, copies scripts, creates `~/.config/elephcinema/config`, and offers to install a udev rule for auto-rip on disc insert.
 
 ## Configuration
 
-Edit `~/.config/elephcinema/config`. All settings have sane defaults — you only need to set output directories:
+Edit `~/.config/elephcinema/config`. All settings have sane defaults — you only need to set your output directories:
 
 ```bash
 # Where to save movies and TV shows
@@ -71,7 +96,8 @@ ELEPHCINEMA_TV_DIR="/mnt/nas/Media/Shows"
 ELEPHCINEMA_TEMP_DIR="$HOME/.local/share/elephcinema/temp"
 ```
 
-### Full Configuration Reference
+<details>
+<summary><b>Full Configuration Reference</b></summary>
 
 | Variable | Default | Description |
 |---|---|---|
@@ -87,74 +113,71 @@ ELEPHCINEMA_TEMP_DIR="$HOME/.local/share/elephcinema/temp"
 | `ELEPHCINEMA_AUDIO_LANGS` | `eng,jpn,und` | Audio languages to keep |
 | `ELEPHCINEMA_SUB_LANGS` | `eng` | Subtitle languages to keep |
 
+</details>
+
 ## Usage
 
 ### Automatic (udev)
 
-Insert a disc. A dialog appears asking if it's a Movie or TV Show. Enter the title and it handles the rest.
+Insert a disc. A dialog appears asking Movie or TV. Enter the title. Done.
 
 ### Manual
 
 ```bash
-# Auto-detect drive
-elephcinema.sh
-
-# Specify device
-elephcinema.sh /dev/sr0
-
-# Force TV mode (skips Movie/TV dialog, falls back to movie if <3 episodes)
-elephcinema.sh /dev/sr0 --force-tv
-
-# Force Movie mode (skips Movie/TV dialog)
-elephcinema.sh /dev/sr0 --force-movie
+elephcinema.sh                         # auto-detect drive
+elephcinema.sh /dev/sr0                # specify device
+elephcinema.sh /dev/sr0 --force-tv     # skip dialog, TV mode (falls back to movie if <3 episodes)
+elephcinema.sh /dev/sr0 --force-movie  # skip dialog, movie mode
 ```
 
 ### Tray Indicator
 
-Run the tray indicator for real-time progress:
-
 ```bash
-# GTK/Ayatana AppIndicator (GNOME, Wayland compatible)
-elephcinema-tray.py
-
-# yad-based alternative
-elephcinema-tray.sh
+elephcinema-tray.py    # GTK/Ayatana AppIndicator (GNOME, Wayland)
+elephcinema-tray.sh    # yad-based alternative
 ```
 
 ### Desktop Notifications
 
 ```bash
-elephcinema-notify.sh
+elephcinema-notify.sh  # notifies at 25% intervals + completion/error
 ```
-
-Shows desktop notifications at 25% rip/encode progress intervals and on completion/error.
 
 ## Troubleshooting
 
-**"Rip too fast — possible drive issue"**
-The drive didn't open properly. This is common with LibreDrive on first spin-up. Eject and re-insert the disc.
+**"Rip too fast — possible drive issue"** — The drive didn't open properly. Common with LibreDrive on first spin-up. Eject and re-insert.
 
-**"No MKV files produced"**
-MakeMKV couldn't read the disc. Check that your MakeMKV license is active and the disc isn't badly scratched.
+**"No MKV files produced"** — MakeMKV couldn't read the disc. Check your license key and disc condition.
 
-**"Low disk space"**
-The temp directory needs at least 55GB free (configurable via `ELEPHCINEMA_MIN_DISK_GB`). Blu-ray rips are large.
+**"Low disk space"** — Temp directory needs at least 55GB free (configurable). Blu-ray rips are large.
 
-**Dialog doesn't appear**
-The script needs access to your display session. If running via udev/systemd-run, it auto-detects Wayland/X11 env variables. Check that `yad` works: `yad --info --text="test"`
+**Dialog doesn't appear** — The script needs display access. Check `yad --info --text="test"` works from your session.
 
-**Encode failed, raw MKV saved**
-HandBrake couldn't encode the file. The raw MKV is saved as a fallback. Check the HandBrake log in the temp directory. Common cause: unsupported codec in source.
+**Encode failed, raw MKV saved** — HandBrake failed; raw MKV saved as fallback. Check `handbrake.log` in temp dir.
 
 ## Uninstall
 
 ```bash
 ./uninstall.sh              # removes /opt/elephcinema/ and udev rule
-./uninstall.sh /usr/local   # if you used a custom prefix
+./uninstall.sh /usr/local   # custom prefix
 ```
 
-Config and logs are preserved. Delete `~/.config/elephcinema/` and `~/.local/share/elephcinema/` manually if desired.
+Config and logs are preserved. Remove `~/.config/elephcinema/` and `~/.local/share/elephcinema/` manually if desired.
 
-## License
+---
+
+<div align="center">
+
+## Support
+
+If ELEPHCINEMA saves you time, consider buying me a coffee.
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support_ELEPHCINEMA-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/cassettefuture)
+
+---
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
+
+An [AnarchyGames.org](https://anarchygames.org) project.
+
+</div>
