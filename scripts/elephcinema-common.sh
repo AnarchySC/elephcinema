@@ -260,11 +260,24 @@ encode_vaapi() {
     total_us=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$input" 2>/dev/null | sed 's/\.//' | head -1)
     total_us="${total_us:-0}"
 
+    # Detect audio codec — copy if MP4-safe, transcode to AAC otherwise
+    local audio_codec audio_opts
+    audio_codec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 "$input" 2>/dev/null | head -1)
+    case "$audio_codec" in
+        aac|ac3|eac3|mp3|mp2|opus|flac)
+            audio_opts="-c:a copy"
+            ;;
+        *)
+            log "Audio codec '$audio_codec' not MP4-safe, transcoding to AAC"
+            audio_opts="-c:a aac -b:a 256k"
+            ;;
+    esac
+
     ffmpeg -y -vaapi_device "$ELEPHCINEMA_VAAPI_DEVICE" \
         -i "$input" \
         -vf "format=nv12,hwupload${scale_filter}" \
         -c:v hevc_vaapi -qp "$qp" -rc_mode CQP \
-        -c:a copy \
+        $audio_opts \
         -movflags +faststart \
         -progress pipe:1 \
         "$output" \
