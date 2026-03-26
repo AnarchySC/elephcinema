@@ -346,17 +346,19 @@ if [ "$IS_TV" -eq 1 ]; then
         fi
 
         # Map selected titles back to files
+        # yad outputs one entry per line (or pipe-separated) — normalize to handle both
         declare -a EPISODE_FILES=()
-        IFS='|' read -ra SEL_TITLES <<< "$SELECTED"
-        for sel in "${SEL_TITLES[@]}"; do
-            sel=$(echo "$sel" | xargs)
-            [ -z "$sel" ] && continue
-            tnum="${sel#Title }"
-            fidx=$(( tnum - 1 ))
-            if [ "$fidx" -ge 0 ] && [ "$fidx" -lt "${#DISC_FILES[@]}" ]; then
-                EPISODE_FILES+=("${DISC_FILES[$fidx]}")
-            fi
-        done
+        while IFS='|' read -ra SEL_PARTS; do
+            for sel in "${SEL_PARTS[@]}"; do
+                sel=$(echo "$sel" | xargs)
+                [ -z "$sel" ] && continue
+                tnum="${sel#Title }"
+                fidx=$(( tnum - 1 ))
+                if [ "$fidx" -ge 0 ] && [ "$fidx" -lt "${#DISC_FILES[@]}" ]; then
+                    EPISODE_FILES+=("${DISC_FILES[$fidx]}")
+                fi
+            done
+        done <<< "$SELECTED"
         NUM_EPISODES=${#EPISODE_FILES[@]}
 
         if [ "$NUM_EPISODES" -eq 0 ]; then
